@@ -17,7 +17,7 @@ jobs:
     runs-on: macos-15-intel
     timeout-minutes: 350
     env:
-      MOZ_AUTOMATION: '1'
+      MOZ_AUTOMATION: ''
       MACH_MAIN_PID: '0'
       MACH_BUILD_PYTHON_NATIVE_PACKAGE_SOURCE: pip
       MACH_NO_UV: '1'
@@ -132,3 +132,4 @@ jobs:
             gecko/obj-high-sierra/config.log
             test-package/macho-audit.txt
           if-no-files-found: ignore
+
