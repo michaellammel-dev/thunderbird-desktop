@@ -431,3 +431,18 @@ diff --git a/dom/webauthn/moz.build b/dom/webauthn/moz.build
      ]
  
  if CONFIG["OS_ARCH"] == "WINNT":
+diff --git a/dom/media/platforms/apple/AppleVTEncoder.cpp b/dom/media/platforms/apple/AppleVTEncoder.cpp
+--- a/dom/media/platforms/apple/AppleVTEncoder.cpp
++++ b/dom/media/platforms/apple/AppleVTEncoder.cpp
+@@ -235,7 +235,10 @@
+     case gfx::TransferFunction::HLG:
+       return Some(kCVImageBufferTransferFunction_ITU_R_2100_HLG);
+     case gfx::TransferFunction::LINEAR:
+-      return Some(kCVImageBufferTransferFunction_Linear);
++      if (__builtin_available(macos 10.14, *)) {
++        return Some(kCVImageBufferTransferFunction_Linear);
++      }
++      return Nothing();
+   }
+ 
+   MOZ_ASSERT_UNREACHABLE("Unsupported transfer function");

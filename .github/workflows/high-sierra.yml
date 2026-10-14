@@ -22,6 +22,8 @@ jobs:
       MACH_NO_UV: '1'
       MACH_SHOW_PIP_OUTPUT: '1'
       PYTHONUNBUFFERED: '1'
+      SCCACHE_DIR: ${{ github.workspace }}/compiler-cache
+      SCCACHE_CACHE_SIZE: 4G
       MACOSX_DEPLOYMENT_TARGET: '10.13'
       MOZBUILD_STATE_PATH: ${{ github.workspace }}/mozbuild-state
       MOZCONFIG: ${{ github.workspace }}/gecko/comm/build/macosx/mozconfig-high-sierra
@@ -104,6 +106,12 @@ jobs:
         run: |
           set -euo pipefail
           python3 -u comm/build/macosx/high-sierra/run-mach.py --no-interactive bootstrap --application-choice=browser --no-system-changes 2>&1 | tee "$GITHUB_WORKSPACE/bootstrap.log"
+      - name: Restore compiler cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: compiler-cache
+          key: high-sierra-compilers-3c71aeacdb296402-v1-${{ github.run_id }}
+          restore-keys: high-sierra-compilers-3c71aeacdb296402-v1-
       - name: Build native Intel application
         working-directory: gecko
         shell: bash
@@ -124,6 +132,12 @@ jobs:
           path: test-package/
           if-no-files-found: error
           retention-days: 30
+      - name: Save compiler cache
+        if: always()
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: compiler-cache
+          key: high-sierra-compilers-3c71aeacdb296402-v1-${{ github.run_id }}
       - name: Upload diagnostic logs
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9

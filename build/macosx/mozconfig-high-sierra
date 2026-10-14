@@ -2,6 +2,7 @@ ac_add_options --enable-application=comm/mail
 ac_add_options --target=x86_64-apple-darwin
 ac_add_options --enable-macos-target=10.13
 ac_add_options --enable-bootstrap
+ac_add_options --with-ccache=sccache
 ac_add_options --disable-updater
 ac_add_options --disable-debug-symbols
 ac_add_options --disable-tests
