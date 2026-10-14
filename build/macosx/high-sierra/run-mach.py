@@ -6,6 +6,8 @@ import traceback
 
 root = pathlib.Path.cwd()
 args = sys.argv[1:]
+sys.path.insert(0, str(root))
+sys.argv[0] = str(root / 'mach')
 faulthandler.enable()
 faulthandler.dump_traceback_later(45, repeat=True)
 try:
@@ -22,3 +24,4 @@ except BaseException:
     raise
 finally:
     faulthandler.cancel_dump_traceback_later()
+
