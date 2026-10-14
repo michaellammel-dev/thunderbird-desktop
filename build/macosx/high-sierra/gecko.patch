@@ -446,3 +446,135 @@ diff --git a/dom/media/platforms/apple/AppleVTEncoder.cpp b/dom/media/platforms/
    }
  
    MOZ_ASSERT_UNREACHABLE("Unsupported transfer function");
+diff --git a/widget/cocoa/TextRecognition.mm b/widget/cocoa/TextRecognition.mm
+--- a/widget/cocoa/TextRecognition.mm
++++ b/widget/cocoa/TextRecognition.mm
+@@ -47,69 +47,74 @@
+               [recognitionLanguages release];
+             });
+ 
+-            dom::TextRecognitionResult result;
+-            dom::TextRecognitionResult* pResult = &result;
++            if (@available(macOS 10.15, *)) {
++              dom::TextRecognitionResult result;
++              dom::TextRecognitionResult* pResult = &result;
+ 
+-            // Define the request to use, which also handles the result. It will
+-            // be run below directly in this thread. After creating this
+-            // request.
+-            VNRecognizeTextRequest* textRecognitionRequest =
+-                [[VNRecognizeTextRequest alloc] initWithCompletionHandler:^(
+-                                                    VNRequest* _Nonnull request,
+-                                                    NSError* _Nullable error) {
+-                  NSArray<VNRecognizedTextObservation*>* observations =
+-                      request.results;
++              // Define the request to use, which also handles the result. It will
++              // be run below directly in this thread. After creating this
++              // request.
++              VNRecognizeTextRequest* textRecognitionRequest =
++                  [[VNRecognizeTextRequest alloc] initWithCompletionHandler:^(
++                                                      VNRequest* _Nonnull request,
++                                                      NSError* _Nullable error) {
++                    NSArray<VNRecognizedTextObservation*>* observations =
++                        request.results;
+ 
+-                  [observations enumerateObjectsUsingBlock:^(
+-                                    VNRecognizedTextObservation* _Nonnull obj,
+-                                    NSUInteger idx, BOOL* _Nonnull stop) {
+-                    // Requests the n top candidates for a recognized text
+-                    // string.
+-                    VNRecognizedText* recognizedText =
+-                        [obj topCandidates:1].firstObject;
++                    [observations enumerateObjectsUsingBlock:^(
++                                      VNRecognizedTextObservation* _Nonnull obj,
++                                      NSUInteger idx, BOOL* _Nonnull stop) {
++                      // Requests the n top candidates for a recognized text
++                      // string.
++                      VNRecognizedText* recognizedText =
++                          [obj topCandidates:1].firstObject;
+ 
+-                    // https://developer.apple.com/documentation/vision/vnrecognizedtext?language=objc
+-                    auto& quad = *pResult->quads().AppendElement();
+-                    CopyNSStringToXPCOMString(recognizedText.string,
+-                                              quad.string());
+-                    quad.confidence() = recognizedText.confidence;
++                      // https://developer.apple.com/documentation/vision/vnrecognizedtext?language=objc
++                      auto& quad = *pResult->quads().AppendElement();
++                      CopyNSStringToXPCOMString(recognizedText.string,
++                                                quad.string());
++                      quad.confidence() = recognizedText.confidence;
+ 
+-                    auto ToImagePoint = [](CGPoint aPoint) -> ImagePoint {
+-                      return {static_cast<float>(aPoint.x),
+-                              static_cast<float>(aPoint.y)};
+-                    };
+-                    *quad.points().AppendElement() =
+-                        ToImagePoint(obj.bottomLeft);
+-                    *quad.points().AppendElement() = ToImagePoint(obj.topLeft);
+-                    *quad.points().AppendElement() = ToImagePoint(obj.topRight);
+-                    *quad.points().AppendElement() =
+-                        ToImagePoint(obj.bottomRight);
++                      auto ToImagePoint = [](CGPoint aPoint) -> ImagePoint {
++                        return {static_cast<float>(aPoint.x),
++                                static_cast<float>(aPoint.y)};
++                      };
++                      *quad.points().AppendElement() =
++                          ToImagePoint(obj.bottomLeft);
++                      *quad.points().AppendElement() = ToImagePoint(obj.topLeft);
++                      *quad.points().AppendElement() = ToImagePoint(obj.topRight);
++                      *quad.points().AppendElement() =
++                          ToImagePoint(obj.bottomRight);
++                    }];
+                   }];
+-                }];
+ 
+-            textRecognitionRequest.recognitionLevel =
+-                VNRequestTextRecognitionLevelAccurate;
+-            textRecognitionRequest.recognitionLanguages = recognitionLanguages;
+-            textRecognitionRequest.usesLanguageCorrection = true;
++              textRecognitionRequest.recognitionLevel =
++                  VNRequestTextRecognitionLevelAccurate;
++              textRecognitionRequest.recognitionLanguages = recognitionLanguages;
++              textRecognitionRequest.usesLanguageCorrection = true;
+ 
+-            // Send out the request. This blocks execution of this thread with
+-            // an expensive CPU call.
+-            NSError* error = nil;
+-            VNImageRequestHandler* requestHandler =
+-                [[[VNImageRequestHandler alloc] initWithCGImage:imageRef
+-                                                        options:@{}]
+-                    autorelease];
++              // Send out the request. This blocks execution of this thread with
++              // an expensive CPU call.
++              NSError* error = nil;
++              VNImageRequestHandler* requestHandler =
++                  [[[VNImageRequestHandler alloc] initWithCGImage:imageRef
++                                                          options:@{}]
++                      autorelease];
+ 
+-            [requestHandler performRequests:@[ textRecognitionRequest ]
+-                                      error:&error];
+-            if (error != nil) {
+-              promise->Reject(
+-                  nsPrintfCString(
+-                      "Failed to perform text recognition request (%ld)\n",
+-                      error.code),
+-                  __func__);
++              [requestHandler performRequests:@[ textRecognitionRequest ]
++                                        error:&error];
++              if (error != nil) {
++                promise->Reject(
++                    nsPrintfCString(
++                        "Failed to perform text recognition request (%ld)\n",
++                        error.code),
++                    __func__);
++              } else {
++                promise->Resolve(std::move(result), __func__);
++              }
+             } else {
+-              promise->Resolve(std::move(result), __func__);
++              promise->Reject("Text recognition requires macOS 10.15"_ns,
++                              __func__);
+             }
+           }),
+       NS_DISPATCH_EVENT_MAY_BLOCK);
