@@ -94,6 +94,13 @@ jobs:
         with:
           path: mac-sdk/MacOSX26.5.sdk
           key: apple-macos-sdk-26.5-5db8b5a06a48-v1
+      - name: Diagnose compiler dependency graph
+        working-directory: gecko
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' '{"level":"3","files_changed":[]}' > "$GITHUB_WORKSPACE/toolchain-params.json"
+          python3 -u comm/build/macosx/high-sierra/run-mach.py --no-interactive taskgraph tasks -k fetch -k toolchain -J --output-file "$GITHUB_WORKSPACE/toolchain-tasks.json" -p "$GITHUB_WORKSPACE/toolchain-params.json" 2>&1 | tee "$GITHUB_WORKSPACE/taskgraph.log"
       - name: Bootstrap Mozilla toolchains
         working-directory: gecko
         shell: bash
@@ -126,6 +133,7 @@ jobs:
         with:
           name: High-Sierra-build-logs-${{ github.run_number }}
           path: |
+            taskgraph.log
             bootstrap.log
             build.log
             package.log
