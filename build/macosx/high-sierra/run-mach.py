@@ -15,13 +15,11 @@ try:
     namespace = runpy.run_path(str(root / 'mach'))
     driver = namespace['check_and_get_mach'](str(root), args)
     print('Mozilla command driver initialized', flush=True)
-    faulthandler.cancel_dump_traceback_later()
     status = driver.run(args)
     print(f'Mozilla command finished with status {status}', flush=True)
-    sys.exit(status)
 except BaseException:
     traceback.print_exc()
     raise
 finally:
     faulthandler.cancel_dump_traceback_later()
-
+sys.exit(status)
