@@ -18,6 +18,10 @@ jobs:
     timeout-minutes: 350
     env:
       MOZ_AUTOMATION: '1'
+      MACH_BUILD_PYTHON_NATIVE_PACKAGE_SOURCE: pip
+      MACH_NO_UV: '1'
+      MACH_SHOW_PIP_OUTPUT: '1'
+      PYTHONUNBUFFERED: '1'
       MACOSX_DEPLOYMENT_TARGET: '10.13'
       MOZBUILD_STATE_PATH: ${{ github.workspace }}/mozbuild-state
       MOZCONFIG: ${{ github.workspace }}/gecko/comm/build/macosx/mozconfig-high-sierra
@@ -26,27 +30,44 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sudo rm -rf /Library/Developer/CoreSimulator
           python3 - <<'PY'
-          import pathlib, subprocess
+          import pathlib, shutil, subprocess
           applications = pathlib.Path('/Applications').resolve()
           selected = pathlib.Path(subprocess.check_output(['xcode-select', '-p'], text=True).strip()).resolve()
           for candidate in applications.glob('Xcode*.app'):
+              if shutil.disk_usage('.').free >= 90 * 1024**3:
+                  break
               target = candidate.resolve()
               if target.parent == applications and target not in selected.parents:
+                  print(f'Removing unused runner toolchain: {target}', flush=True)
                   subprocess.run(['sudo', 'rm', '-rf', str(target)], check=True)
+          if shutil.disk_usage('.').free < 60 * 1024**3:
+              raise RuntimeError('Insufficient space for a full native build')
           PY
           df -h .
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.12'
+      - name: Restore pinned Gecko source
+        id: gecko-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: gecko
+          key: gecko-source-macos-intel-3c71aeacdb296402e41fb2084b13e797d1770642-v1
       - name: Check out pinned Gecko
+        if: steps.gecko-cache.outputs.cache-hit != 'true'
         shell: bash
         run: |
           set -euo pipefail
           git clone --depth 1 --branch FIREFOX_158_0_BUILD1 https://github.com/mozilla-firefox/firefox.git gecko
           test "$(git -C gecko rev-parse HEAD)" = 3c71aeacdb296402e41fb2084b13e797d1770642
+      - name: Cache unmodified Gecko source
+        if: steps.gecko-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: gecko
+          key: gecko-source-macos-intel-3c71aeacdb296402e41fb2084b13e797d1770642-v1
       - name: Check out Thunderbird port
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -59,7 +80,10 @@ jobs:
           git apply comm/build/macosx/high-sierra/gecko.patch
       - name: Bootstrap Mozilla toolchains
         working-directory: gecko
-        run: python3 mach --no-interactive bootstrap --application-choice=browser --no-system-changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          env MOZ_AUTOMATION= python3 -u mach --no-interactive bootstrap --application-choice=browser --no-system-changes 2>&1 | tee "$GITHUB_WORKSPACE/bootstrap.log"
       - name: Build native Intel application
         working-directory: gecko
         shell: bash
@@ -86,8 +110,10 @@ jobs:
         with:
           name: High-Sierra-build-logs-${{ github.run_number }}
           path: |
+            bootstrap.log
             build.log
             package.log
             gecko/obj-high-sierra/config.log
             test-package/macho-audit.txt
           if-no-files-found: ignore
+
