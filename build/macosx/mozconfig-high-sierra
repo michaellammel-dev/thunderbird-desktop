@@ -6,8 +6,5 @@ ac_add_options --with-ccache=sccache
 ac_add_options --disable-updater
 ac_add_options --disable-debug-symbols
 ac_add_options --disable-tests
-# The current Cocoa Web Speech backend requires AVSpeechSynthesizer (10.14+).
-# Keep it out of this High Sierra test build rather than linking unavailable APIs.
-ac_add_options --disable-webspeech
 mk_add_options MOZ_OBJDIR=@TOPSRCDIR@/obj-high-sierra
 mk_add_options MOZ_MAKE_FLAGS=-j4

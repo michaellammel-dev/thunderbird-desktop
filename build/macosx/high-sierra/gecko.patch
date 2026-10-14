@@ -578,3 +578,17 @@ diff --git a/widget/cocoa/TextRecognition.mm b/widget/cocoa/TextRecognition.mm
              }
            }),
        NS_DISPATCH_EVENT_MAY_BLOCK);
+diff --git a/dom/media/webspeech/synth/moz.build b/dom/media/webspeech/synth/moz.build
+--- a/dom/media/webspeech/synth/moz.build
++++ b/dom/media/webspeech/synth/moz.build
+@@ -40,8 +40,8 @@
+ if CONFIG["MOZ_WIDGET_TOOLKIT"] == "windows":
+     DIRS += ["windows"]
+ 
+-if CONFIG["MOZ_WIDGET_TOOLKIT"] == "cocoa":
+-    DIRS += ["cocoa"]
++# High Sierra test builds omit the Cocoa voice backend (requires macOS 10.14).
++# Keep the shared Web Speech components and IPC definitions available.
+ 
+ if CONFIG["MOZ_WIDGET_TOOLKIT"] == "android":
+     DIRS += ["android"]
