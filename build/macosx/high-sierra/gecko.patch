@@ -300,3 +300,109 @@ index db1184b47..9aea6cbdb 100644
  }
  
  //
+diff --git a/widget/cocoa/nsLookAndFeel.mm b/widget/cocoa/nsLookAndFeel.mm
+index 30d68468c..5f8f4823a 100644
+--- a/widget/cocoa/nsLookAndFeel.mm
++++ b/widget/cocoa/nsLookAndFeel.mm
+@@ -147,11 +147,15 @@ nsresult nsLookAndFeel::NativeGetColor(ColorID aID, ColorScheme aScheme,
+       aColor = NS_TRANSPARENT;
+       break;
+     case ColorID::Accentcolor:
+-      aColor = GetColorFromNSColor(NSColor.controlAccentColor);
++      aColor = GetColorFromNSColor(ControlAccentColor());
+       break;
+     case ColorID::MozMenuhover:
+     case ColorID::Selecteditem:
+-      aColor = GetColorFromNSColor(NSColor.selectedContentBackgroundColor);
++      if (@available(macOS 10.14, *)) {
++        aColor = GetColorFromNSColor(NSColor.selectedContentBackgroundColor);
++      } else {
++        aColor = GetColorFromNSColor(NSColor.alternateSelectedControlColor);
++      }
+       if (aID == ColorID::MozMenuhover &&
+           !LookAndFeel::GetInt(IntID::PrefersReducedTransparency)) {
+         // Wash the color a little bit with semi-transparent white to match a
+@@ -309,8 +313,12 @@ nsresult nsLookAndFeel::NativeGetColor(ColorID aID, ColorScheme aScheme,
+       aColor = GetColorFromNSColor(NSColor.headerTextColor);
+       break;
+     case ColorID::MozColheaderactive:
+-      aColor = GetColorFromNSColor(
+-          NSColor.unemphasizedSelectedContentBackgroundColor);
++      if (@available(macOS 10.14, *)) {
++        aColor = GetColorFromNSColor(
++            NSColor.unemphasizedSelectedContentBackgroundColor);
++      } else {
++        aColor = GetColorFromNSColor(NSColor.secondarySelectedControlColor);
++      }
+       break;
+     case ColorID::MozColheader:
+     case ColorID::MozColheaderhover:
+@@ -371,11 +379,14 @@ nsresult nsLookAndFeel::NativeGetColor(ColorID aID, ColorScheme aScheme,
+ static bool SystemWantsDarkTheme() {
+   // This returns true if the macOS system appearance is set to dark mode,
+   // false otherwise.
+-  NSAppearanceName aquaOrDarkAqua =
+-      [NSApp.effectiveAppearance bestMatchFromAppearancesWithNames:@[
+-        NSAppearanceNameAqua, NSAppearanceNameDarkAqua
+-      ]];
+-  return [aquaOrDarkAqua isEqualToString:NSAppearanceNameDarkAqua];
++  if (@available(macOS 10.14, *)) {
++    NSAppearanceName aquaOrDarkAqua =
++        [NSApp.effectiveAppearance bestMatchFromAppearancesWithNames:@[
++          NSAppearanceNameAqua, NSAppearanceNameDarkAqua
++        ]];
++    return [aquaOrDarkAqua isEqualToString:NSAppearanceNameDarkAqua];
++  }
++  return false;
+ }
+ 
+ static bool PrefersNonBlinkingTextInsertionIndicator() {
+@@ -656,10 +667,12 @@ nsresult nsLookAndFeel::GetKeyboardLayoutImpl(nsACString& aLayout) {
+                   object:nil
+       suspensionBehavior:NSNotificationSuspensionBehaviorDeliverImmediately];
+ 
+-  [NSApp addObserver:self
+-          forKeyPath:@"effectiveAppearance"
+-             options:0
+-             context:nil];
++  if (@available(macOS 10.14, *)) {
++    [NSApp addObserver:self
++            forKeyPath:@"effectiveAppearance"
++               options:0
++               context:nil];
++  }
+ 
+   return self;
+ }
+diff --git a/widget/cocoa/nsNativeThemeColors.h b/widget/cocoa/nsNativeThemeColors.h
+index 5a77b8431..aacd11413 100644
+--- a/widget/cocoa/nsNativeThemeColors.h
++++ b/widget/cocoa/nsNativeThemeColors.h
+@@ -9,11 +9,23 @@
+ 
+ #include "mozilla/ColorScheme.h"
+ 
++inline NSColor* ControlAccentColor() {
++  if (@available(macOS 10.14, *)) {
++    return [NSColor controlAccentColor];
++  }
++  return [NSColor currentControlTint] == NSGraphiteControlTint
++             ? [NSColor colorWithSRGBRed:0.635 green:0.635 blue:0.655 alpha:1.0]
++             : [NSColor colorWithSRGBRed:0.247 green:0.584 blue:0.965 alpha:1.0];
++}
++
+ inline NSAppearance* NSAppearanceForColorScheme(mozilla::ColorScheme aScheme) {
+-  NSAppearanceName appearanceName = aScheme == mozilla::ColorScheme::Light
+-                                        ? NSAppearanceNameAqua
+-                                        : NSAppearanceNameDarkAqua;
+-  return [NSAppearance appearanceNamed:appearanceName];
++  if (@available(macOS 10.14, *)) {
++    NSAppearanceName appearanceName = aScheme == mozilla::ColorScheme::Light
++                                          ? NSAppearanceNameAqua
++                                          : NSAppearanceNameDarkAqua;
++    return [NSAppearance appearanceNamed:appearanceName];
++  }
++  return [NSAppearance appearanceNamed:NSAppearanceNameAqua];
+ }
+ 
+ #endif  // nsNativeThemeColors_h_
