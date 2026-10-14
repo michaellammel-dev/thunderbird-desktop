@@ -79,6 +79,21 @@ jobs:
         run: |
           git apply --check comm/build/macosx/high-sierra/gecko.patch
           git apply comm/build/macosx/high-sierra/gecko.patch
+      - name: Restore macOS SDK
+        id: sdk-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: mac-sdk/MacOSX26.5.sdk
+          key: apple-macos-sdk-26.5-5db8b5a06a48-v1
+      - name: Extract verified SDK from Apple's package
+        working-directory: gecko
+        run: python3 comm/build/macosx/high-sierra/download-sdk.py "$GITHUB_WORKSPACE/mac-sdk"
+      - name: Cache macOS SDK
+        if: steps.sdk-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: mac-sdk/MacOSX26.5.sdk
+          key: apple-macos-sdk-26.5-5db8b5a06a48-v1
       - name: Bootstrap Mozilla toolchains
         working-directory: gecko
         shell: bash
