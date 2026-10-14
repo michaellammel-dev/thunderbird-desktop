@@ -17,7 +17,6 @@ jobs:
     runs-on: macos-15-intel
     timeout-minutes: 350
     env:
-      MOZ_AUTOMATION: ''
       MACH_MAIN_PID: '0'
       MACH_BUILD_PYTHON_NATIVE_PACKAGE_SOURCE: pip
       MACH_NO_UV: '1'
