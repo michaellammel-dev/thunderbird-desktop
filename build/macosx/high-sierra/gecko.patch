@@ -1,3 +1,16 @@
+diff --git a/widget/cocoa/moz.build b/widget/cocoa/moz.build
+index d56b26e2e..7c161e8ad 100644
+--- a/widget/cocoa/moz.build
++++ b/widget/cocoa/moz.build
+@@ -167,7 +167,7 @@ RESOURCE_FILES.__setattr__(
+ )
+ 
+ OS_LIBS += [
+-    "-framework Accessibility",
++    "-weak_framework Accessibility",
+     "-framework IOSurface",
+     "-framework Vision",
+ ]
 diff --git a/widget/cocoa/nsCocoaUtils.mm b/widget/cocoa/nsCocoaUtils.mm
 index db1184b47..9aea6cbdb 100644
 --- a/widget/cocoa/nsCocoaUtils.mm
@@ -406,3 +419,15 @@ index 5a77b8431..aacd11413 100644
  }
  
  #endif  // nsNativeThemeColors_h_
+diff --git a/dom/webauthn/moz.build b/dom/webauthn/moz.build
+--- a/dom/webauthn/moz.build
++++ b/dom/webauthn/moz.build
+@@ -81,7 +81,7 @@
+         "MacOSWebAuthnService.mm",
+     ]
+     OS_LIBS += [
+-        "-framework AuthenticationServices",
++        "-weak_framework AuthenticationServices",
+     ]
+ 
+ if CONFIG["OS_ARCH"] == "WINNT":
