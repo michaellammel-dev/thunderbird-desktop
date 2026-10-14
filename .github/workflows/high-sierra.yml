@@ -50,25 +50,23 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.12'
-      - name: Restore pinned Gecko source
-        id: gecko-cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          path: gecko
-          key: gecko-source-macos-intel-3c71aeacdb296402e41fb2084b13e797d1770642-v1
       - name: Check out pinned Gecko
-        if: steps.gecko-cache.outputs.cache-hit != 'true'
         shell: bash
         run: |
           set -euo pipefail
           git clone --depth 1 --branch FIREFOX_158_0_BUILD1 https://github.com/mozilla-firefox/firefox.git gecko
           test "$(git -C gecko rev-parse HEAD)" = 3c71aeacdb296402e41fb2084b13e797d1770642
-      - name: Cache unmodified Gecko source
-        if: steps.gecko-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          path: gecko
-          key: gecko-source-macos-intel-3c71aeacdb296402e41fb2084b13e797d1770642-v1
+          git -C gecko config core.trustctime false
+          git -C gecko config core.checkStat minimal
+      - name: Check source comparison before bootstrap
+        working-directory: gecko
+        run: |
+          python3 - <<'PY'
+          import subprocess, time
+          started = time.monotonic()
+          subprocess.run(['git', 'diff', '--name-only', '--no-renames', '--diff-filter=AM'], check=True, timeout=120)
+          print(f'Source comparison finished in {time.monotonic() - started:.1f}s', flush=True)
+          PY
       - name: Check out Thunderbird port
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
