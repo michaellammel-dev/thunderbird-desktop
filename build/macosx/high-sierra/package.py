@@ -58,6 +58,7 @@ subprocess.run(['/usr/bin/ditto', '-c', '-k', '--sequesterRsrc', '--keepParent',
 (output / 'TESTEN.txt').write_text(
     'Experimenteller Thunderbird-Testbuild fuer Intel und macOS 10.13.\n'
     'Die Kompatibilitaet mit High Sierra ist noch nicht zur Laufzeit bestaetigt.\n'
+    'Die Web-Sprachfunktionen (Web Speech API) sind in diesem Testbuild deaktiviert.\n'
     'ZIP entpacken und die enthaltene App in einen separaten Testordner kopieren.\n'
     'Mit einem neuen Profil starten, um vorhandene Maildaten zu erhalten:\n'
     f'"/absoluter/Pfad/{app.name}/Contents/MacOS/{info["CFBundleExecutable"]}" -no-remote -ProfileManager\n'
