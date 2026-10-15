@@ -1119,3 +1119,23 @@ new file mode 100644
 +#include "ggml/include/ggml-metal.h"
 +
 +void ggml_backend_metal_disable(void) {}
+diff --git a/mozglue/misc/Mutex_posix.cpp b/mozglue/misc/Mutex_posix.cpp
+--- a/mozglue/misc/Mutex_posix.cpp
++++ b/mozglue/misc/Mutex_posix.cpp
+@@ -63,9 +63,13 @@
+                     "mozilla::detail::MutexImpl::MutexImpl: "
+                     "pthread_mutexattr_settype failed");
+ #  elif defined(POLICY_KIND)
+-  TRY_CALL_PTHREADS(pthread_mutexattr_setpolicy_np(&attr, POLICY_KIND),
+-                    "mozilla::detail::MutexImpl::MutexImpl: "
+-                    "pthread_mutexattr_setpolicy_np failed");
++  // High Sierra rejects FIRSTFIT even though setpolicy_np itself exists.
++  // Preserve the default mutex policy there, as in Thunderbird/Firefox 115.
++  if (__builtin_available(macOS 10.14, *)) {
++    TRY_CALL_PTHREADS(pthread_mutexattr_setpolicy_np(&attr, POLICY_KIND),
++                      "mozilla::detail::MutexImpl::MutexImpl: "
++                      "pthread_mutexattr_setpolicy_np failed");
++  }
+ #  endif
+   attrp = &attr;
+ #endif
