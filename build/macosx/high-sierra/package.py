@@ -60,6 +60,7 @@ subprocess.run(['/usr/bin/ditto', '-c', '-k', '--sequesterRsrc', '--keepParent',
     'Die Kompatibilitaet mit High Sierra ist noch nicht zur Laufzeit bestaetigt.\n'
     'Die native Sprachausgabe der Web Speech API ist in diesem Testbuild deaktiviert.\n'
     'Die Metal-Beschleunigung fuer lokale KI-Modelle ist in diesem Testbuild deaktiviert.\n'
+    'Die ONNX-Laufzeit fuer lokale KI-Funktionen ist nicht enthalten (benoetigt macOS 10.15).\n'
     'ZIP entpacken und die enthaltene App in einen separaten Testordner kopieren.\n'
     'Mit einem neuen Profil starten, um vorhandene Maildaten zu erhalten:\n'
     f'"/absoluter/Pfad/{app.name}/Contents/MacOS/{info["CFBundleExecutable"]}" -no-remote -ProfileManager\n'

@@ -6,5 +6,7 @@ ac_add_options --with-ccache=sccache
 ac_add_options --disable-updater
 ac_add_options --disable-debug-symbols
 ac_add_options --disable-tests
+# Mozilla's prebuilt ONNX library requires macOS 10.15.
+ac_add_options --without-onnx-runtime
 mk_add_options MOZ_OBJDIR=@TOPSRCDIR@/obj-high-sierra
 mk_add_options MOZ_MAKE_FLAGS=-j4
