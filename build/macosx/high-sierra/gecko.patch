@@ -592,3 +592,47 @@ diff --git a/dom/media/webspeech/synth/moz.build b/dom/media/webspeech/synth/moz
  
  if CONFIG["MOZ_WIDGET_TOOLKIT"] == "android":
      DIRS += ["android"]
+diff --git a/gfx/layers/NativeLayerCA.mm b/gfx/layers/NativeLayerCA.mm
+--- a/gfx/layers/NativeLayerCA.mm
++++ b/gfx/layers/NativeLayerCA.mm
+@@ -810,7 +810,14 @@
+ 
+ CGColorRef CGColorCreateForDeviceColor(const gfx::DeviceColor& aColor) {
+   if (StaticPrefs::gfx_color_management_native_srgb()) {
+-    return CGColorCreateSRGB(aColor.r, aColor.g, aColor.b, aColor.a);
++    if (@available(macOS 10.15, *)) {
++      return CGColorCreateSRGB(aColor.r, aColor.g, aColor.b, aColor.a);
++    }
++    CGColorSpaceRef colorSpace = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
++    const CGFloat components[] = {aColor.r, aColor.g, aColor.b, aColor.a};
++    CGColorRef color = CGColorCreate(colorSpace, components);
++    CGColorSpaceRelease(colorSpace);
++    return color;
+   }
+ 
+   return CGColorCreateGenericRGB(aColor.r, aColor.g, aColor.b, aColor.a);
+@@ -1713,6 +1720,13 @@
+     bool aSpecializeVideo, const CFTypeRefPtr<IOSurfaceRef>& aFrontSurface,
+     const Maybe<gfx::DeviceColor>& aColor, bool aIsVideo, bool aIsDRM,
+     bool aIsHDR) {
++  if (@available(macOS 10.15, *)) {
++    // Capture protection for DRM layers is available.
++  } else if (aIsDRM) {
++    // Do not display a protected layer when capture protection is unavailable.
++    return false;
++  }
++
+   // If we have an OnlyVideo update, handle it and early exit.
+   if (aUpdate == UpdateType::OnlyVideo) {
+     // If we don't have any updates to do, exit early with success. This is
+@@ -1843,7 +1857,9 @@
+   }
+ 
+   if (aSpecializeVideo && mMutatedIsDRM) {
+-    ((AVSampleBufferDisplayLayer*)mContentCALayer).preventsCapture = aIsDRM;
++    if (@available(macOS 10.15, *)) {
++      ((AVSampleBufferDisplayLayer*)mContentCALayer).preventsCapture = aIsDRM;
++    }
+   }
+ 
+   bool shouldTintOpaqueness = StaticPrefs::gfx_core_animation_tint_opaque();
