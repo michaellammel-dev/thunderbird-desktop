@@ -636,3 +636,486 @@ diff --git a/gfx/layers/NativeLayerCA.mm b/gfx/layers/NativeLayerCA.mm
    }
  
    bool shouldTintOpaqueness = StaticPrefs::gfx_core_animation_tint_opaque();
+diff --git a/ipc/chromium/src/base/process_util_mac.mm b/ipc/chromium/src/base/process_util_mac.mm
+--- a/ipc/chromium/src/base/process_util_mac.mm
++++ b/ipc/chromium/src/base/process_util_mac.mm
+@@ -23,7 +23,8 @@
+ 
+ extern "C" {
+ // N.B. the syscalls are available back to 10.5, but the C wrappers
+-// only in 10.12.  Fortunately, 10.15 is our current baseline.
++// only in 10.12, which is older than our High Sierra target.
++int pthread_chdir_np(const char* dir) API_AVAILABLE(macosx(10.12));
+ int pthread_fchdir_np(int fd) API_AVAILABLE(macosx(10.12));
+ 
+ int responsibility_spawnattrs_setdisclaim(posix_spawnattr_t attrs, int disclaim)
+@@ -84,12 +85,31 @@
+     }
+   }
+ 
++  // As in ESR115, use a thread-local cwd on systems without spawn chdir.
++  int old_cwd_fd = -1;
++  auto thread_cwd_guard = mozilla::MakeScopeExit([&old_cwd_fd] {
++    if (old_cwd_fd >= 0) {
++      if (pthread_fchdir_np(old_cwd_fd) != 0) {
++        DLOG(ERROR) << "pthread_fchdir_np failed; thread cwd was not restored";
++      }
++      close(old_cwd_fd);
++    }
++  });
+   if (!options.workdir.empty()) {
+-    int rv = posix_spawn_file_actions_addchdir_np(&file_actions,
+-                                                  options.workdir.c_str());
+-    if (rv != 0) {
+-      DLOG(WARNING) << "posix_spawn_file_actions_addchdir_np failed";
+-      return Err(LaunchError("posix_spawn_file_actions_addchdir", rv));
++    if (@available(macOS 10.15, *)) {
++      int rv = posix_spawn_file_actions_addchdir_np(&file_actions,
++                                                   options.workdir.c_str());
++      if (rv != 0) {
++        return Err(LaunchError("posix_spawn_file_actions_addchdir", rv));
++      }
++    } else {
++      old_cwd_fd = open(".", O_RDONLY | O_CLOEXEC | O_DIRECTORY);
++      if (old_cwd_fd < 0) {
++        return Err(LaunchError("open", errno));
++      }
++      if (pthread_chdir_np(options.workdir.c_str()) != 0) {
++        return Err(LaunchError("pthread_chdir_np", errno));
++      }
+     }
+   }
+ 
+@@ -118,10 +138,12 @@
+ #endif
+ 
+   if (options.disclaim) {
+-    int err = responsibility_spawnattrs_setdisclaim(&spawnattr, 1);
+-    if (err != 0) {
+-      DLOG(WARNING) << "responsibility_spawnattrs_setdisclaim failed";
+-      return Err(LaunchError("responsibility_spawnattrs_setdisclaim", err));
++    if (@available(macOS 10.14, *)) {
++      int err = responsibility_spawnattrs_setdisclaim(&spawnattr, 1);
++      if (err != 0) {
++        DLOG(WARNING) << "responsibility_spawnattrs_setdisclaim failed";
++        return Err(LaunchError("responsibility_spawnattrs_setdisclaim", err));
++      }
+     }
+   }
+ 
+diff --git a/third_party/angle/src/common/apple_platform_utils.mm b/third_party/angle/src/common/apple_platform_utils.mm
+--- a/third_party/angle/src/common/apple_platform_utils.mm
++++ b/third_party/angle/src/common/apple_platform_utils.mm
+@@ -108,7 +108,11 @@
+             return [device supportsFamily:MTLGPUFamilyMacCatalyst2];
+ #elif TARGET_OS_MACCATALYST || TARGET_OS_OSX
+             // Devices in family 1, such as MacBookPro11,4, cannot use ANGLE's Metal backend.
+-            return [device supportsFamily:MTLGPUFamilyMac2];
++            if (@available(macOS 10.15, *))
++            {
++                return [device supportsFamily:MTLGPUFamilyMac2];
++            }
++            return false;
+ #else
+             // Devices starting with A9 onwards are supported. Simulator is supported as per
+             // definition that running simulator on Mac Family 1 devices is not supported.
+diff --git a/third_party/libwebrtc/sdk/objc/components/capturer/RTCCameraVideoCapturer.m b/third_party/libwebrtc/sdk/objc/components/capturer/RTCCameraVideoCapturer.m
+--- a/third_party/libwebrtc/sdk/objc/components/capturer/RTCCameraVideoCapturer.m
++++ b/third_party/libwebrtc/sdk/objc/components/capturer/RTCCameraVideoCapturer.m
+@@ -126,23 +126,29 @@
+ 
+ + (NSArray<AVCaptureDevice *> *)captureDevicesWithDeviceTypes:
+     (NSArray<AVCaptureDeviceType> *)deviceTypes {
+-  AVCaptureDeviceDiscoverySession *session = [AVCaptureDeviceDiscoverySession
+-      discoverySessionWithDeviceTypes:deviceTypes
+-                            mediaType:AVMediaTypeVideo
+-                             position:AVCaptureDevicePositionUnspecified];
+-  return session.devices;
++  if (@available(macOS 10.15, iOS 10.0, *)) {
++    AVCaptureDeviceDiscoverySession *session = [AVCaptureDeviceDiscoverySession
++        discoverySessionWithDeviceTypes:deviceTypes
++                              mediaType:AVMediaTypeVideo
++                               position:AVCaptureDevicePositionUnspecified];
++    return session.devices;
++  }
++  return [AVCaptureDevice devicesWithMediaType:AVMediaTypeVideo];
+ }
+ 
+ + (NSArray<AVCaptureDeviceType> *)defaultCaptureDeviceTypes {
+-  NSArray *types = @[ AVCaptureDeviceTypeBuiltInWideAngleCamera ];
++  if (@available(macOS 10.15, iOS 10.0, *)) {
++    NSArray *types = @[ AVCaptureDeviceTypeBuiltInWideAngleCamera ];
+ #if !defined(WEBRTC_IOS)
+-  if (@available(macOS 14.0, *)) {
+-    types = [types arrayByAddingObject:AVCaptureDeviceTypeExternal];
+-  } else {
+-    types = [types arrayByAddingObject:AVCaptureDeviceTypeExternalUnknown];
+-  }
+-#endif
+-  return types;
++    if (@available(macOS 14.0, *)) {
++      types = [types arrayByAddingObject:AVCaptureDeviceTypeExternal];
++    } else {
++      types = [types arrayByAddingObject:AVCaptureDeviceTypeExternalUnknown];
++    }
++#endif
++    return types;
++  }
++  return @[];
+ }
+ 
+ + (NSArray<AVCaptureDeviceFormat *> *)supportedFormatsForDevice:
+diff --git a/toolkit/xre/MacLaunchHelper.mm b/toolkit/xre/MacLaunchHelper.mm
+--- a/toolkit/xre/MacLaunchHelper.mm
++++ b/toolkit/xre/MacLaunchHelper.mm
+@@ -80,26 +80,42 @@
+     // We use NSWorkspace to register the application into the
+     // `TALAppsToRelaunchAtLogin` list and allow for macOS session resume.
+     // This API only works with `.app`s.
+-    __block dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
+-    NSWorkspaceOpenConfiguration* config =
+-        [NSWorkspaceOpenConfiguration configuration];
+-    [config setArguments:aArguments];
+-    [config setCreatesNewApplicationInstance:YES];
+-    [config setEnvironment:[[NSProcessInfo processInfo] environment]];
+-
+-    [[NSWorkspace sharedWorkspace]
+-        openApplicationAtURL:[NSURL fileURLWithPath:launchPath]
+-               configuration:config
+-           completionHandler:^(NSRunningApplication* aChild, NSError* aError) {
+-             if (aError) {
+-               NSLog(@"LaunchMacApp: Failed to run application. Error: %@",
+-                     aError);
+-             }
+-             dispatch_semaphore_signal(semaphore);
+-           }];
+-
+-    // We use a semaphore to wait for the application to launch.
+-    dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
++    if (@available(macOS 10.15, *)) {
++      __block dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
++      NSWorkspaceOpenConfiguration* config =
++          [NSWorkspaceOpenConfiguration configuration];
++      [config setArguments:aArguments];
++      [config setCreatesNewApplicationInstance:YES];
++      [config setEnvironment:[[NSProcessInfo processInfo] environment]];
++
++      [[NSWorkspace sharedWorkspace]
++          openApplicationAtURL:[NSURL fileURLWithPath:launchPath]
++                 configuration:config
++             completionHandler:^(NSRunningApplication* aChild, NSError* aError) {
++               if (aError) {
++                 NSLog(@"LaunchMacApp: Failed to run application. Error: %@",
++                       aError);
++               }
++               dispatch_semaphore_signal(semaphore);
++             }];
++
++      // We use a semaphore to wait for the application to launch.
++      dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
++    } else {
++      NSDictionary* configuration = @{
++        NSWorkspaceLaunchConfigurationArguments : aArguments ?: @[],
++        NSWorkspaceLaunchConfigurationEnvironment : [[NSProcessInfo processInfo] environment]
++      };
++      NSError* error = nil;
++      [[NSWorkspace sharedWorkspace]
++          launchApplicationAtURL:[NSURL fileURLWithPath:launchPath]
++                         options:NSWorkspaceLaunchNewInstance
++                   configuration:configuration
++                           error:&error];
++      if (error) {
++        NSLog(@"LaunchMacApp: Failed to run application. Error: %@", error);
++      }
++    }
+   } @catch (NSException* e) {
+     NSLog(@"%@: %@", e.name, e.reason);
+   }
+diff --git a/widget/cocoa/MediaHardwareKeysEventSourceMacMediaCenter.mm b/widget/cocoa/MediaHardwareKeysEventSourceMacMediaCenter.mm
+--- a/widget/cocoa/MediaHardwareKeysEventSourceMacMediaCenter.mm
++++ b/widget/cocoa/MediaHardwareKeysEventSourceMacMediaCenter.mm
+@@ -203,49 +203,51 @@
+   [nowPlayingInfo setObject:nsCocoaUtils::ToNSString(aMetadata.mAlbum)
+                      forKey:MPMediaItemPropertyAlbumTitle];
+ 
+-  bool remove = true;
+-  for (const dom::MediaImageData& imageData : aMetadata.mArtwork) {
+-    if (!imageData.mDataSurface) {
+-      continue;
+-    }
+-
+-    if (mCurrentImageUrl == imageData.mSrc) {
+-      LOG("Artwork image url did not change.");
++  if (@available(macOS 10.13.2, *)) {
++    bool remove = true;
++    for (const dom::MediaImageData& imageData : aMetadata.mArtwork) {
++      if (!imageData.mDataSurface) {
++        continue;
++      }
++
++      if (mCurrentImageUrl == imageData.mSrc) {
++        LOG("Artwork image url did not change.");
++        remove = false;
++        break;
++      }
++
++      auto drawable = MakeRefPtr<gfxSurfaceDrawable>(
++          imageData.mDataSurface, imageData.mDataSurface->GetSize());
++      nsCOMPtr<imgIContainer> imageContainer =
++          image::ImageOps::CreateFromDrawable(drawable);
++
++      NSImage* image = nil;
++      nsresult rv =
++          nsCocoaUtils::CreateDualRepresentationNSImageFromImageContainer(
++              imageContainer, imgIContainer::FRAME_CURRENT, nullptr,
++              NSMakeSize(0, 0), &image);
++      if (NS_FAILED(rv) || !image) {
++        LOG("Failed to create cocoa image. Try next image");
++        continue;
++      }
++
++      MPMediaItemArtwork* artwork = [[MPMediaItemArtwork alloc]
++          initWithBoundsSize:image.size
++              requestHandler:^NSImage* _Nonnull(CGSize aSize) {
++                return image;
++              }];
++      [nowPlayingInfo setObject:artwork forKey:MPMediaItemPropertyArtwork];
++      [artwork release];
++      [image release];
++
++      mCurrentImageUrl = imageData.mSrc;
+       remove = false;
+       break;
+     }
+ 
+-    auto drawable = MakeRefPtr<gfxSurfaceDrawable>(
+-        imageData.mDataSurface, imageData.mDataSurface->GetSize());
+-    nsCOMPtr<imgIContainer> imageContainer =
+-        image::ImageOps::CreateFromDrawable(drawable);
+-
+-    NSImage* image = nil;
+-    nsresult rv =
+-        nsCocoaUtils::CreateDualRepresentationNSImageFromImageContainer(
+-            imageContainer, imgIContainer::FRAME_CURRENT, nullptr,
+-            NSMakeSize(0, 0), &image);
+-    if (NS_FAILED(rv) || !image) {
+-      LOG("Failed to create cocoa image. Try next image");
+-      continue;
++    if (remove) {
++      [nowPlayingInfo removeObjectForKey:MPMediaItemPropertyArtwork];
+     }
+-
+-    MPMediaItemArtwork* artwork = [[MPMediaItemArtwork alloc]
+-        initWithBoundsSize:image.size
+-            requestHandler:^NSImage* _Nonnull(CGSize aSize) {
+-              return image;
+-            }];
+-    [nowPlayingInfo setObject:artwork forKey:MPMediaItemPropertyArtwork];
+-    [artwork release];
+-    [image release];
+-
+-    mCurrentImageUrl = imageData.mSrc;
+-    remove = false;
+-    break;
+-  }
+-
+-  if (remove) {
+-    [nowPlayingInfo removeObjectForKey:MPMediaItemPropertyArtwork];
+   }
+ 
+   // The procedure of updating `nowPlayingInfo` is actually an async operation
+diff --git a/widget/cocoa/ScreenHelperCocoa.mm b/widget/cocoa/ScreenHelperCocoa.mm
+--- a/widget/cocoa/ScreenHelperCocoa.mm
++++ b/widget/cocoa/ScreenHelperCocoa.mm
+@@ -110,8 +110,11 @@
+ 
+   // What's the maximum color component value this screen can display? This
+   // is a reasonable stand-in for measuring peak brightness.
+-  CGFloat componentValueMax =
+-      aScreen.maximumPotentialExtendedDynamicRangeColorComponentValue;
++  CGFloat componentValueMax = 1.0;
++  if (@available(macOS 10.15, *)) {
++    componentValueMax =
++        aScreen.maximumPotentialExtendedDynamicRangeColorComponentValue;
++  }
+ 
+   // Should we treat this as HDR? Based on spec at
+   // https://drafts.csswg.org/mediaqueries-5/#dynamic-range, we'll consider it
+diff --git a/widget/cocoa/nsMacDockSupport.mm b/widget/cocoa/nsMacDockSupport.mm
+--- a/widget/cocoa/nsMacDockSupport.mm
++++ b/widget/cocoa/nsMacDockSupport.mm
+@@ -60,7 +60,11 @@
+   progressFillRect.size.width *= mFractionValue;
+   [NSGraphicsContext saveGraphicsState];
+   [NSBezierPath clipRect:progressFillRect];
+-  [[NSColor controlAccentColor] setFill];
++  if (@available(macOS 10.14, *)) {
++    [[NSColor controlAccentColor] setFill];
++  } else {
++    [[NSColor alternateSelectedControlColor] setFill];
++  }
+   [path fill];
+   [NSGraphicsContext restoreGraphicsState];
+ 
+@@ -527,24 +531,48 @@
+     [arguments addObject:mozilla::XPCOMStringToNSString(arg)];
+   }
+ 
+-  NSWorkspaceOpenConfiguration* config =
+-      [NSWorkspaceOpenConfiguration configuration];
+-  [config setArguments:arguments];
+-  [config setCreatesNewApplicationInstance:YES];
+-  [config setEnvironment:[[NSProcessInfo processInfo] environment]];
+-
+-  if (aLaunchOptions) {
+-    bool val = false;
+-    if (NS_SUCCEEDED(aLaunchOptions->GetAddsToRecentItems(&val))) {
+-      [config setAddsToRecentItems:val];
+-    }
+-  }
+-
+-  [[NSWorkspace sharedWorkspace]
+-      openApplicationAtURL:[NSURL fileURLWithPath:launchPath]
+-             configuration:config
+-         completionHandler:^(NSRunningApplication* aChild, NSError* aError){
+-         }];
++  if (@available(macOS 10.15, *)) {
++    NSWorkspaceOpenConfiguration* config =
++        [NSWorkspaceOpenConfiguration configuration];
++    [config setArguments:arguments];
++    [config setCreatesNewApplicationInstance:YES];
++    [config setEnvironment:[[NSProcessInfo processInfo] environment]];
++
++    if (aLaunchOptions) {
++      bool val = false;
++      if (NS_SUCCEEDED(aLaunchOptions->GetAddsToRecentItems(&val))) {
++        [config setAddsToRecentItems:val];
++      }
++    }
++
++    [[NSWorkspace sharedWorkspace]
++        openApplicationAtURL:[NSURL fileURLWithPath:launchPath]
++               configuration:config
++           completionHandler:^(NSRunningApplication* aChild, NSError* aError){
++           }];
++  } else {
++    NSWorkspaceLaunchOptions options = NSWorkspaceLaunchNewInstance;
++    if (aLaunchOptions) {
++      bool addsToRecents = false;
++      if (NS_SUCCEEDED(aLaunchOptions->GetAddsToRecentItems(&addsToRecents)) &&
++          !addsToRecents) {
++        options |= NSWorkspaceLaunchWithoutAddingToRecents;
++      }
++    }
++    NSDictionary* configuration = @{
++      NSWorkspaceLaunchConfigurationArguments : arguments,
++      NSWorkspaceLaunchConfigurationEnvironment : [[NSProcessInfo processInfo] environment]
++    };
++    NSError* error = nil;
++    NSRunningApplication* child = [[NSWorkspace sharedWorkspace]
++        launchApplicationAtURL:[NSURL fileURLWithPath:launchPath]
++                       options:options
++                 configuration:configuration
++                         error:&error];
++    if (!child || error) {
++      return NS_ERROR_FAILURE;
++    }
++  }
+ 
+   return NS_OK;
+ 
+diff --git a/gfx/thebes/CoreTextFontList.cpp b/gfx/thebes/CoreTextFontList.cpp
+--- a/gfx/thebes/CoreTextFontList.cpp
++++ b/gfx/thebes/CoreTextFontList.cpp
+@@ -1188,8 +1188,12 @@
+     }
+   } while (result != kCFURLEnumeratorEnd);
+ 
+-  CTFontManagerRegisterFontURLs(urls, kCTFontManagerScopeProcess, false,
+-                                nullptr);
++  if (__builtin_available(macOS 10.15, *)) {
++    CTFontManagerRegisterFontURLs(urls, kCTFontManagerScopeProcess, false,
++                                  nullptr);
++  } else {
++    CTFontManagerRegisterFontsForURLs(urls, kCTFontManagerScopeProcess, nullptr);
++  }
+ }
+ 
+ void CoreTextFontList::ReadSystemFontList(dom::SystemFontList* aList)
+diff --git a/third_party/llama.cpp/moz.build b/third_party/llama.cpp/moz.build
+--- a/third_party/llama.cpp/moz.build
++++ b/third_party/llama.cpp/moz.build
+@@ -131,44 +131,9 @@
+       "-framework Accelerate"
+   ]
+ 
+-  # Metal backend support
+-  DEFINES["GGML_USE_METAL"] = 1
+-  DEFINES["GGML_METAL_EMBED_LIBRARY"] = 1
+-
+-  # Generate assembly file with embedded Metal shader source
+-  GeneratedFile(
+-      'ggml-metal-embed.s',
+-      'ggml-metal-embed.metal',
+-      script='generate_metal_embed.py',
+-      inputs=[
+-          'ggml/src/ggml-common.h',
+-          'ggml/src/ggml-metal/ggml-metal-impl.h',
+-          'ggml/src/ggml-metal/ggml-metal.metal',
+-      ]
+-  )
+-
+-  # Add Metal backend sources
+-  SOURCES += [
+-      '!ggml-metal-embed.s',
+-      'ggml/src/ggml-metal/ggml-metal-common.cpp',
+-      'ggml/src/ggml-metal/ggml-metal-context.m',
+-      'ggml/src/ggml-metal/ggml-metal-device-m.m',
+-      'ggml/src/ggml-metal/ggml-metal-device.cpp',
+-      'ggml/src/ggml-metal/ggml-metal-ops.cpp',
+-      'ggml/src/ggml-metal/ggml-metal.cpp',
+-  ]
+-
+-  # Export Metal header
+-  EXPORTS += [
+-      'ggml/include/ggml-metal.h',
+-  ]
+-
+-  # Link Metal frameworks
+-  OS_LIBS += [
+-      '-framework Foundation',
+-      '-framework Metal',
+-      '-framework MetalKit',
+-  ]
++  # High Sierra test builds retain the CPU backend only.
++  # The bundled Metal inference backend requires macOS 10.15 or newer.
++  SOURCES += ["high-sierra-metal-disabled.cpp"]
+ 
+ if CONFIG["OS_TARGET"] == "Linux":
+   OS_LIBS += [
+diff --git a/widget/cocoa/nsCocoaWindow.mm b/widget/cocoa/nsCocoaWindow.mm
+--- a/widget/cocoa/nsCocoaWindow.mm
++++ b/widget/cocoa/nsCocoaWindow.mm
+@@ -8333,7 +8333,11 @@
+                                 GetMenuCornerRadius());
+ 
+     case WindowShadow::Tooltip:
+-      return CreateVibrancyView(frame, NSVisualEffectMaterialToolTip,
++      if (@available(macOS 10.14, *)) {
++        return CreateVibrancyView(frame, NSVisualEffectMaterialToolTip,
++                                  GetTooltipCornerRadius());
++      }
++      return CreateVibrancyView(frame, NSVisualEffectMaterialMenu,
+                                 GetTooltipCornerRadius());
+ 
+     case WindowShadow::None:
+diff --git a/third_party/llama.cpp/high-sierra-metal-disabled.cpp b/third_party/llama.cpp/high-sierra-metal-disabled.cpp
+new file mode 100644
+--- /dev/null
++++ b/third_party/llama.cpp/high-sierra-metal-disabled.cpp
+@@ -0,0 +1,5 @@
++// This test build never registers a Metal inference device.
++// Retain the disable entry point required by Gecko's runtime library loader.
++#include "ggml/include/ggml-metal.h"
++
++void ggml_backend_metal_disable(void) {}
