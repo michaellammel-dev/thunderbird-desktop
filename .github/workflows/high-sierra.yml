@@ -117,7 +117,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 mach build 2>&1 | tee "$GITHUB_WORKSPACE/build.log"
+          python3 mach build --keep-going 2>&1 | tee "$GITHUB_WORKSPACE/build.log"
       - name: Package and inspect application
         working-directory: gecko
         shell: bash
