@@ -78,6 +78,9 @@ jobs:
         run: |
           git apply --check comm/build/macosx/high-sierra/gecko.patch
           git apply comm/build/macosx/high-sierra/gecko.patch
+      - name: Check release packaging safeguards
+        working-directory: gecko
+        run: python3 comm/build/macosx/high-sierra/test_package.py
       - name: Restore macOS SDK
         id: sdk-cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -150,5 +153,6 @@ jobs:
             package.log
             gecko/obj-high-sierra/config.log
             test-package/macho-audit.txt
+            test-package/resource-audit.txt
+            gecko/obj-high-sierra/dist/*.mac.dmg
           if-no-files-found: ignore
-
