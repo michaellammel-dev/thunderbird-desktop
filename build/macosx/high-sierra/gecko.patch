@@ -1185,3 +1185,46 @@ diff --git a/memory/build/Mutex.h b/memory/build/Mutex.h
  #else
      pthread_mutex_lock(&mMutex);
  #endif
+diff --git a/toolkit/xre/nsNativeAppSupportCocoa.mm b/toolkit/xre/nsNativeAppSupportCocoa.mm
+--- a/toolkit/xre/nsNativeAppSupportCocoa.mm
++++ b/toolkit/xre/nsNativeAppSupportCocoa.mm
+@@ -69,7 +69,7 @@
+ 
+   int major, minor, bugfix;
+   nsCocoaFeatures::GetSystemVersion(major, minor, bugfix);
+-  if (major >= 11 || (major == 10 && minor >= 15)) {
++  if (major >= 11 || (major == 10 && minor >= 13)) {
+     *_retval = true;
+   } else {
+     NSLog(@"Minimum OS version requirement not met!");
+diff --git a/widget/cocoa/nsCocoaFeatures.mm b/widget/cocoa/nsCocoaFeatures.mm
+--- a/widget/cocoa/nsCocoaFeatures.mm
++++ b/widget/cocoa/nsCocoaFeatures.mm
+@@ -13,6 +13,7 @@
+ #define MACOS_MAJOR_VERSION_MASK 0x00FF0000
+ #define MACOS_MINOR_VERSION_MASK 0x0000FF00
+ #define MACOS_BUGFIX_VERSION_MASK 0x000000FF
++#define MACOS_VERSION_10_13_HEX 0x000A0D00
+ #define MACOS_VERSION_10_15_HEX 0x000A0F00
+ #define MACOS_VERSION_10_16_HEX 0x000A1000
+ #define MACOS_VERSION_11_0_HEX 0x000B0000
+@@ -91,12 +92,13 @@
+   int32_t macOSVersion;
+   if (aMajor < 10) {
+     aMajor = 10;
+-    NS_ERROR("Couldn't determine macOS version, assuming 10.15");
+-    macOSVersion = MACOS_VERSION_10_15_HEX;
+-  } else if (aMajor == 10 && aMinor < 15) {
+-    aMinor = 15;
+-    NS_ERROR("macOS version too old, assuming 10.15");
+-    macOSVersion = MACOS_VERSION_10_15_HEX;
++    aMinor = 13;
++    NS_ERROR("Couldn't determine macOS version, assuming 10.13");
++    macOSVersion = MACOS_VERSION_10_13_HEX;
++  } else if (aMajor == 10 && aMinor < 13) {
++    aMinor = 13;
++    NS_ERROR("macOS version too old, assuming 10.13");
++    macOSVersion = MACOS_VERSION_10_13_HEX;
+   } else {
+     MOZ_ASSERT(aMajor >= 10);
+     MOZ_ASSERT(aMajor < 256);
